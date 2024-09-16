@@ -102,7 +102,7 @@ public:
                 is_available_ = false;
             } else if (_is_available && !is_available_) {
                 is_available_ = true;
-                send();
+                send_request();
             }
         }
     }
@@ -128,24 +128,29 @@ public:
         }
 
         if (is_available_)
-            send();
+            send_request();
     }
 
-    void send() {
-        // Prepare the payload with two 4-byte integers
+    void send_request() {
         uint32_t operand1, operand2;
+        std::string input_line;
 
-        // Prompt user to enter two numbers
-        std::cout << "Enter first number: ";
-        std::cin >> operand1;
-        std::cout << "Enter second number: ";
-        std::cin >> operand2;
+        // Prompt user to enter two numbers in one line
+        std::cout << "Enter two numbers separated by space: ";
+        std::getline(std::cin, input_line);
 
-        // Save the operands to display them in the response handler
+        // Parse the input line
+        std::istringstream iss(input_line);
+        if (!(iss >> operand1 >> operand2)) {
+            std::cerr << "Error: Invalid input. Please enter two numbers separated by space." << std::endl;
+            return;
+        }
+
+        // Store operands for result display
         last_operand1_ = operand1;
         last_operand2_ = operand2;
 
-        // Prepare the payload
+        // Prepare the payload with two 4-byte integers
         std::vector<vsomeip::byte_t> its_payload_data(8);
         its_payload_data[0] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
         its_payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
