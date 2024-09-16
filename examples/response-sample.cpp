@@ -1,30 +1,23 @@
-// Copyright (C) 2014-2023 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-#ifndef VSOMEIP_ENABLE_SIGNAL_HANDLING
+#include <cstring>  // for memcpy  
 #include <csignal>
-#endif
 #include <chrono>
 #include <condition_variable>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <thread>
-
 #include <vsomeip/vsomeip.hpp>
-
 #include "sample-ids.hpp"
 
 class service_sample {
 public:
-    service_sample(bool _use_static_routing) :
-            app_(vsomeip::runtime::get()->create_application()),
-            is_registered_(false),
-            use_static_routing_(_use_static_routing),
-            blocked_(false),
-            running_(true),
-            offer_thread_(std::bind(&service_sample::run, this)) {
+    service_sample(bool _use_static_routing)
+        : app_(vsomeip::runtime::get()->create_application()),
+          is_registered_(false),
+          use_static_routing_(_use_static_routing),
+          blocked_(false),
+          running_(true),
+          offer_thread_(std::bind(&service_sample::run, this)) {
     }
 
     bool init() {
@@ -35,15 +28,11 @@ public:
             return false;
         }
         app_->register_state_handler(
-                std::bind(&service_sample::on_state, this,
-                        std::placeholders::_1));
+                std::bind(&service_sample::on_state, this, std::placeholders::_1));
         app_->register_message_handler(
                 SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID, SAMPLE_METHOD_ID,
-                std::bind(&service_sample::on_message, this,
-                        std::placeholders::_1));
+                std::bind(&service_sample::on_message, this, std::placeholders::_1));
 
-        std::cout << "Static routing " << (use_static_routing_ ? "ON" : "OFF")
-                  << std::endl;
         return true;
     }
 
@@ -52,9 +41,6 @@ public:
     }
 
 #ifndef VSOMEIP_ENABLE_SIGNAL_HANDLING
-    /*
-     * Handle signal to shutdown
-     */
     void stop() {
         running_ = false;
         blocked_ = true;
@@ -74,87 +60,87 @@ public:
 
     void offer() {
         app_->offer_service(SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID);
-        app_->offer_service(SAMPLE_SERVICE_ID + 1, SAMPLE_INSTANCE_ID);
     }
 
     void stop_offer() {
         app_->stop_offer_service(SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID);
-        app_->stop_offer_service(SAMPLE_SERVICE_ID + 1, SAMPLE_INSTANCE_ID);
-    }
-
-    void on_state(vsomeip::state_type_e _state) {
-        std::cout << "Application " << app_->get_name() << " is "
-                << (_state == vsomeip::state_type_e::ST_REGISTERED ?
-                        "registered." : "deregistered.")
-                << std::endl;
-
-        if (_state == vsomeip::state_type_e::ST_REGISTERED) {
-            if (!is_registered_) {
-                is_registered_ = true;
-                blocked_ = true;
-                condition_.notify_one();
-            }
-        } else {
-            is_registered_ = false;
-        }
-    }
-
-    void on_message(const std::shared_ptr<vsomeip::message> &_request) {
-        std::cout << "Received a message with Client/Session ["
-		  << std::setfill('0') << std::hex
-		  << std::setw(4) << _request->get_client() << "/"
-		  << std::setw(4) << _request->get_session() << "]"
-		  << std::endl;
-
-        std::shared_ptr<vsomeip::message> its_response
-            = vsomeip::runtime::get()->create_response(_request);
-
-        std::shared_ptr<vsomeip::payload> its_payload
-            = vsomeip::runtime::get()->create_payload();
-        std::vector<vsomeip::byte_t> its_payload_data;
-        for (std::size_t i = 0; i < 120; ++i)
-            its_payload_data.push_back(vsomeip::byte_t(i % 256));
-        its_payload->set_data(its_payload_data);
-        its_response->set_payload(its_payload);
-
-        app_->send(its_response);
     }
 
     void run() {
-        std::unique_lock<std::mutex> its_lock(mutex_);
-        while (!blocked_)
-            condition_.wait(its_lock);
-
-        bool is_offer(true);
-
-        if (use_static_routing_) {
-            offer();
-            while (running_);
-        } else {
-            while (running_) {
-                if (is_offer)
-                    offer();
-                else
-                    stop_offer();
-
-                for (int i = 0; i < 10 && running_; i++)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                is_offer = !is_offer;
+        while (running_) {
+            std::unique_lock<std::mutex> its_lock(mutex_);
+            while (!blocked_)
+                condition_.wait(its_lock);
+            if (is_registered_) {
+                app_->offer_service(SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID);
+                blocked_ = false;
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
+
+    void on_state(vsomeip::state_type_e _state) {
+        std::cout << "Service state "
+                  << (_state == vsomeip::state_type_e::ST_REGISTERED
+                          ? "REGISTERED" : "DEREGISTERED") << std::endl;
+
+        if (_state == vsomeip::state_type_e::ST_REGISTERED) {
+            is_registered_ = true;
+            offer();
+        } else {
+            is_registered_ = false;
+            stop_offer();
+        }
+    }
+
+    // response-sample.cpp
+
+    // response-sample.cpp
+
+    void on_message(const std::shared_ptr<vsomeip::message> &_request) {
+    std::shared_ptr<vsomeip::payload> its_payload = _request->get_payload();
+    std::vector<vsomeip::byte_t> its_payload_data(its_payload->get_length());
+
+    // Copy the received payload
+    std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
+
+    // Get the length of the received message
+    std::size_t length = its_payload_data.size(); // Use std::size_t to match the return type of .size()
+
+    std::cout << "Payload length: " << length << " bytes" << std::endl;
+    std::cout << "Received message: " << std::string(its_payload_data.begin(), its_payload_data.end()) << std::endl;
+
+    // Send the length of the received message back to the client
+    std::shared_ptr<vsomeip::payload> response_payload = vsomeip::runtime::get()->create_payload();
+    std::vector<vsomeip::byte_t> response_payload_data(4);
+
+    // Store the length in the response payload (as 4 bytes)
+    response_payload_data[0] = static_cast<vsomeip::byte_t>((length >> 24) & 0xFF);
+    response_payload_data[1] = static_cast<vsomeip::byte_t>((length >> 16) & 0xFF);
+    response_payload_data[2] = static_cast<vsomeip::byte_t>((length >> 8) & 0xFF);
+    response_payload_data[3] = static_cast<vsomeip::byte_t>(length & 0xFF);
+
+    response_payload->set_data(response_payload_data);
+
+    std::cout << "Sending response with length: " << length << " bytes." << std::endl;
+
+    // Create a response message, set the session and client
+    std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
+    response->set_payload(response_payload);
+
+    // Send the response message
+    app_->send(response);
+}
+
 
 private:
     std::shared_ptr<vsomeip::application> app_;
     bool is_registered_;
     bool use_static_routing_;
-
     std::mutex mutex_;
     std::condition_variable condition_;
     bool blocked_;
     bool running_;
-
-    // blocked_ must be initialized before the thread is started.
     std::thread offer_thread_;
 };
 
@@ -168,14 +154,16 @@ private:
 #endif
 
 int main(int argc, char **argv) {
-    bool use_static_routing(false);
+    bool use_static_routing = false;
 
     std::string static_routing_enable("--static-routing");
 
-    for (int i = 1; i < argc; i++) {
+    int i = 1;
+    while (i < argc) {
         if (static_routing_enable == argv[i]) {
             use_static_routing = true;
         }
+        i++;
     }
 
     service_sample its_sample(use_static_routing);

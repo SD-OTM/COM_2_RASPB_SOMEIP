@@ -1,19 +1,12 @@
-// Copyright (C) 2014-2023 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-#ifndef VSOMEIP_ENABLE_SIGNAL_HANDLING
+#include <cstring>  // for memcpy   
 #include <csignal>
-#endif
 #include <chrono>
 #include <condition_variable>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <thread>
-
 #include <vsomeip/vsomeip.hpp>
-
 #include "sample-ids.hpp"
 
 class client_sample {
@@ -61,22 +54,11 @@ public:
         request_->set_instance(SAMPLE_INSTANCE_ID);
         request_->set_method(SAMPLE_METHOD_ID);
 
-        std::shared_ptr< vsomeip::payload > its_payload = vsomeip::runtime::get()->create_payload();
-        std::vector< vsomeip::byte_t > its_payload_data;
-        for (std::size_t i = 0; i < 10; ++i)
-            its_payload_data.push_back(vsomeip::byte_t(i % 256));
-        its_payload->set_data(its_payload_data);
-        request_->set_payload(its_payload);
-
         app_->register_availability_handler(SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID,
                 std::bind(&client_sample::on_availability,
                           this,
                           std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-        app_->register_availability_handler(SAMPLE_SERVICE_ID + 1, SAMPLE_INSTANCE_ID,
-                std::bind(&client_sample::on_availability,
-                          this,
-                          std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         return true;
     }
 
@@ -85,9 +67,6 @@ public:
     }
 
 #ifndef VSOMEIP_ENABLE_SIGNAL_HANDLING
-    /*
-     * Handle signal to shutdown
-     */
     void stop() {
         running_ = false;
         blocked_ = true;
@@ -128,26 +107,42 @@ public:
         }
     }
 
-    void on_message(const std::shared_ptr< vsomeip::message > &_response) {
-        std::cout << "Received a response from Service ["
-                << std::setfill('0') << std::hex
-                << std::setw(4) << _response->get_service()
-                << "."
-                << std::setw(4) << _response->get_instance()
-                << "] to Client/Session ["
-                << std::setw(4) << _response->get_client()
-                << "/"
-                << std::setw(4) << _response->get_session()
-                << "]"
-                << std::endl;
-        if (is_available_)
-            send();
+    void on_message(const std::shared_ptr<vsomeip::message> &_response) {
+    std::shared_ptr<vsomeip::payload> its_payload = _response->get_payload();
+    std::vector<vsomeip::byte_t> its_payload_data(its_payload->get_length());
+
+    // Copy data using memcpy
+    std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
+
+    if (its_payload_data.size() == 4) {
+        // Interpret the first 4 bytes as a length
+        uint32_t length = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
+                          (static_cast<uint32_t>(its_payload_data[1]) << 16) |
+                          (static_cast<uint32_t>(its_payload_data[2]) << 8) |
+                          (static_cast<uint32_t>(its_payload_data[3]));
+
+        std::cout << "Received response: Length of the sent message is " << length << " bytes." << std::endl;
+    } else {
+        std::cerr << "Error: Response payload size is incorrect." << std::endl;
     }
 
+    if (is_available_)
+        send();
+}
+
+
     void send() {
-        if (!be_quiet_)
-        {
-            std::lock_guard< std::mutex > its_lock(mutex_);
+        std::string input_data;
+        std::cout << "Enter a message to send: ";
+        std::getline(std::cin, input_data);
+
+        std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
+        std::vector<vsomeip::byte_t> its_payload_data(input_data.begin(), input_data.end());
+        its_payload->set_data(its_payload_data);
+        request_->set_payload(its_payload);
+
+        if (!be_quiet_) {
+            std::lock_guard<std::mutex> its_lock(mutex_);
             blocked_ = true;
             condition_.notify_one();
         }
@@ -155,32 +150,19 @@ public:
 
     void run() {
         while (running_) {
-            {
-                std::unique_lock<std::mutex> its_lock(mutex_);
-                while (!blocked_) condition_.wait(its_lock);
-                if (is_available_) {
-                    app_->send(request_);
-                    std::cout << "Client/Session ["
-                            << std::setfill('0') << std::hex
-                            << std::setw(4) << request_->get_client()
-                            << "/"
-                            << std::setw(4) << request_->get_session()
-                            << "] sent a request to Service ["
-                            << std::setw(4) << request_->get_service()
-                            << "."
-                            << std::setw(4) << request_->get_instance()
-                            << "]"
-                            << std::endl;
-                    blocked_ = false;
-                }
+            std::unique_lock<std::mutex> its_lock(mutex_);
+            while (!blocked_) condition_.wait(its_lock);
+            if (is_available_) {
+                app_->send(request_);
+                blocked_ = false;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(cycle_));
         }
     }
 
 private:
-    std::shared_ptr< vsomeip::application > app_;
-    std::shared_ptr< vsomeip::message > request_;
+    std::shared_ptr<vsomeip::application> app_;
+    std::shared_ptr<vsomeip::message> request_;
     bool use_tcp_;
     bool be_quiet_;
     uint32_t cycle_;
@@ -205,10 +187,9 @@ private:
 int main(int argc, char **argv) {
     bool use_tcp = false;
     bool be_quiet = false;
-    uint32_t cycle = 1000; // Default: 1s
+    uint32_t cycle = 1000;
 
     std::string tcp_enable("--tcp");
-    std::string udp_enable("--udp");
     std::string quiet_enable("--quiet");
     std::string cycle_arg("--cycle");
 
@@ -216,8 +197,6 @@ int main(int argc, char **argv) {
     while (i < argc) {
         if (tcp_enable == argv[i]) {
             use_tcp = true;
-        } else if (udp_enable == argv[i]) {
-            use_tcp = false;
         } else if (quiet_enable == argv[i]) {
             be_quiet = true;
         } else if (cycle_arg == argv[i] && i+1 < argc) {
