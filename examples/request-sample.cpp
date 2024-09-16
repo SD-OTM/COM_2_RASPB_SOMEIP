@@ -115,38 +115,54 @@ public:
     std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
 
     if (its_payload_data.size() == 4) {
-        // Interpret the first 4 bytes as a length
-        uint32_t length = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
+        // Interpret the 4-byte result
+        uint32_t result = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
                           (static_cast<uint32_t>(its_payload_data[1]) << 16) |
                           (static_cast<uint32_t>(its_payload_data[2]) << 8) |
                           (static_cast<uint32_t>(its_payload_data[3]));
 
-        std::cout << "Received response: Length of the sent message is " << length << " bytes." << std::endl;
+        std::cout << "Received result: " << result << std::endl;
     } else {
         std::cerr << "Error: Response payload size is incorrect." << std::endl;
     }
 
     if (is_available_)
         send();
-}
+    }
+
 
 
     void send() {
-        std::string input_data;
-        std::cout << "Enter a message to send: ";
-        std::getline(std::cin, input_data);
+    uint32_t operand1, operand2;
 
-        std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
-        std::vector<vsomeip::byte_t> its_payload_data(input_data.begin(), input_data.end());
-        its_payload->set_data(its_payload_data);
-        request_->set_payload(its_payload);
+    // Prompt user to enter two numbers
+    std::cout << "Enter first number: ";
+    std::cin >> operand1;
+    std::cout << "Enter second number: ";
+    std::cin >> operand2;
 
-        if (!be_quiet_) {
-            std::lock_guard<std::mutex> its_lock(mutex_);
-            blocked_ = true;
-            condition_.notify_one();
-        }
+    // Prepare the payload with two 4-byte integers
+    std::vector<vsomeip::byte_t> its_payload_data(8);
+    its_payload_data[0] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
+    its_payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
+    its_payload_data[2] = static_cast<vsomeip::byte_t>((operand1 >> 8) & 0xFF);
+    its_payload_data[3] = static_cast<vsomeip::byte_t>(operand1 & 0xFF);
+    its_payload_data[4] = static_cast<vsomeip::byte_t>((operand2 >> 24) & 0xFF);
+    its_payload_data[5] = static_cast<vsomeip::byte_t>((operand2 >> 16) & 0xFF);
+    its_payload_data[6] = static_cast<vsomeip::byte_t>((operand2 >> 8) & 0xFF);
+    its_payload_data[7] = static_cast<vsomeip::byte_t>(operand2 & 0xFF);
+
+    std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
+    its_payload->set_data(its_payload_data);
+    request_->set_payload(its_payload);
+
+    if (!be_quiet_) {
+        std::lock_guard<std::mutex> its_lock(mutex_);
+        blocked_ = true;
+        condition_.notify_one();
     }
+}
+
 
     void run() {
         while (running_) {

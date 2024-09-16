@@ -104,33 +104,43 @@ public:
     // Copy the received payload
     std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
 
-    // Get the length of the received message
-    std::size_t length = its_payload_data.size(); // Use std::size_t to match the return type of .size()
+    if (its_payload_data.size() == 8) { // We expect two 4-byte integers
+        // Convert the first 4 bytes to an integer (first operand)
+        uint32_t operand1 = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
+                            (static_cast<uint32_t>(its_payload_data[1]) << 16) |
+                            (static_cast<uint32_t>(its_payload_data[2]) << 8) |
+                            (static_cast<uint32_t>(its_payload_data[3]));
 
-    //std::cout << "Payload length: " << length << " bytes" << std::endl;
-    std::cout << "Received message: " << std::string(its_payload_data.begin(), its_payload_data.end()) << std::endl;
+        // Convert the second 4 bytes to an integer (second operand)
+        uint32_t operand2 = (static_cast<uint32_t>(its_payload_data[4]) << 24) |
+                            (static_cast<uint32_t>(its_payload_data[5]) << 16) |
+                            (static_cast<uint32_t>(its_payload_data[6]) << 8) |
+                            (static_cast<uint32_t>(its_payload_data[7]));
 
-    // Send the length of the received message back to the client
-    std::shared_ptr<vsomeip::payload> response_payload = vsomeip::runtime::get()->create_payload();
-    std::vector<vsomeip::byte_t> response_payload_data(4);
+        // Perform addition
+        uint32_t result = operand1 + operand2;
 
-    // Store the length in the response payload (as 4 bytes)
-    response_payload_data[0] = static_cast<vsomeip::byte_t>((length >> 24) & 0xFF);
-    response_payload_data[1] = static_cast<vsomeip::byte_t>((length >> 16) & 0xFF);
-    response_payload_data[2] = static_cast<vsomeip::byte_t>((length >> 8) & 0xFF);
-    response_payload_data[3] = static_cast<vsomeip::byte_t>(length & 0xFF);
+        // Prepare the result to be sent as a response (4 bytes)
+        std::vector<vsomeip::byte_t> response_payload_data(4);
+        response_payload_data[0] = static_cast<vsomeip::byte_t>((result >> 24) & 0xFF);
+        response_payload_data[1] = static_cast<vsomeip::byte_t>((result >> 16) & 0xFF);
+        response_payload_data[2] = static_cast<vsomeip::byte_t>((result >> 8) & 0xFF);
+        response_payload_data[3] = static_cast<vsomeip::byte_t>(result & 0xFF);
 
-    response_payload->set_data(response_payload_data);
+        std::shared_ptr<vsomeip::payload> response_payload = vsomeip::runtime::get()->create_payload();
+        response_payload->set_data(response_payload_data);
 
-    //std::cout << "Sending response with length: " << length << " bytes." << std::endl;
+        // Create and send the response message
+        std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
+        response->set_payload(response_payload);
+        app_->send(response);
 
-    // Create a response message, set the session and client
-    std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
-    response->set_payload(response_payload);
-
-    // Send the response message
-    app_->send(response);
+        std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
+    } else {
+        std::cerr << "Error: Invalid payload size. Expected 8 bytes." << std::endl;
+    }
 }
+
 
 
 private:
