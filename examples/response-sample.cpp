@@ -107,7 +107,7 @@ public:
     // Get the length of the received message
     std::size_t length = its_payload_data.size(); // Use std::size_t to match the return type of .size()
 
-    std::cout << "Payload length: " << length << " bytes" << std::endl;
+    //std::cout << "Payload length: " << length << " bytes" << std::endl;
     std::cout << "Received message: " << std::string(its_payload_data.begin(), its_payload_data.end()) << std::endl;
 
     // Send the length of the received message back to the client
@@ -122,7 +122,7 @@ public:
 
     response_payload->set_data(response_payload_data);
 
-    std::cout << "Sending response with length: " << length << " bytes." << std::endl;
+    //std::cout << "Sending response with length: " << length << " bytes." << std::endl;
 
     // Create a response message, set the session and client
     std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
