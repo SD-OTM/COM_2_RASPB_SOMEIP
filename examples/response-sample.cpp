@@ -27,6 +27,7 @@ public:
             std::cerr << "Couldn't initialize application" << std::endl;
             return false;
         }
+
         app_->register_state_handler(
                 std::bind(&service_sample::on_state, this, std::placeholders::_1));
         app_->register_message_handler(
@@ -72,7 +73,7 @@ public:
             while (!blocked_)
                 condition_.wait(its_lock);
             if (is_registered_) {
-                app_->offer_service(SAMPLE_SERVICE_ID, SAMPLE_INSTANCE_ID);
+                offer();
                 blocked_ = false;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -92,10 +93,6 @@ public:
             stop_offer();
         }
     }
-
-    // response-sample.cpp
-
-    // response-sample.cpp
 
     void on_message(const std::shared_ptr<vsomeip::message> &_request) {
     std::shared_ptr<vsomeip::payload> its_payload = _request->get_payload();
@@ -133,14 +130,15 @@ public:
         // Create and send the response message
         std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
         response->set_payload(response_payload);
+
+        // No need to check the return value of send()
         app_->send(response);
 
-        std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
+        std::cout << "Received numbers: " << operand1 << " + " << operand2 << std::endl;
     } else {
         std::cerr << "Error: Invalid payload size. Expected 8 bytes." << std::endl;
     }
 }
-
 
 
 private:
