@@ -119,14 +119,36 @@ public:
 
     // Perform the operation based on the operation character
     uint32_t result;
-    if (operation == '+') {
-        result = operand1 + operand2;
-        std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
-    } else if (operation == '-') {
-        result = operand1 - operand2;
-        std::cout << "Received numbers: " << operand1 << " - " << operand2 << " = " << result << std::endl;
-    } else {
-        std::cerr << "Error: Invalid operation." << std::endl;
+    bool valid_operation = true;
+    switch (operation) {
+        case '+':
+            result = operand1 + operand2;
+            std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
+            break;
+        case '-':
+            result = operand1 - operand2;
+            std::cout << "Received numbers: " << operand1 << " - " << operand2 << " = " << result << std::endl;
+            break;
+        case '*':
+            result = operand1 * operand2;
+            std::cout << "Received numbers: " << operand1 << " * " << operand2 << " = " << result << std::endl;
+            break;
+        case '/':
+            if (operand2 != 0) {
+                result = operand1 / operand2;
+                std::cout << "Received numbers: " << operand1 << " / " << operand2 << " = " << result << std::endl;
+            } else {
+                std::cerr << "Error: Division by zero." << std::endl;
+                valid_operation = false;
+            }
+            break;
+        default:
+            std::cerr << "Error: Invalid operation." << std::endl;
+            valid_operation = false;
+            break;
+    }
+
+    if (!valid_operation) {
         return; // Invalid operation, don't send a response
     }
 
@@ -146,9 +168,7 @@ public:
 
     // Send the response
     app_->send(response);
-}
-
-
+    }
 
 private:
     std::shared_ptr<vsomeip::application> app_;

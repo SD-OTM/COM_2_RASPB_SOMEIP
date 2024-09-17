@@ -108,87 +108,106 @@ public:
     }
 
     void on_message(const std::shared_ptr<vsomeip::message> &_response) {
-        std::shared_ptr<vsomeip::payload> its_payload = _response->get_payload();
-        std::vector<vsomeip::byte_t> its_payload_data(its_payload->get_length());
+    std::shared_ptr<vsomeip::payload> its_payload = _response->get_payload();
+    std::vector<vsomeip::byte_t> its_payload_data(its_payload->get_length());
 
-        // Copy data using memcpy
-        std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
+    // Copy data using memcpy
+    std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
 
-        if (its_payload_data.size() == 4) {
-            // Interpret the 4-byte result
-            uint32_t result = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
-                              (static_cast<uint32_t>(its_payload_data[1]) << 16) |
-                              (static_cast<uint32_t>(its_payload_data[2]) << 8) |
-                              (static_cast<uint32_t>(its_payload_data[3]));
+    if (its_payload_data.size() == 4) {
+        // Interpret the 4-byte result
+        uint32_t result = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
+                          (static_cast<uint32_t>(its_payload_data[1]) << 16) |
+                          (static_cast<uint32_t>(its_payload_data[2]) << 8) |
+                          (static_cast<uint32_t>(its_payload_data[3]));
 
-            // Display the result and operands
-            std::cout << "Received numbers: " << last_operand1_ << " + " << last_operand2_ << " = " << result << std::endl;
-        } else {
-            std::cerr << "Error: Response payload size is incorrect." << std::endl;
+        // Display the result based on the last operation
+        switch (last_operation_) {
+            case '+':
+                std::cout << "Received numbers: " << last_operand1_ << " + " << last_operand2_ << " = " << result << std::endl;
+                break;
+            case '-':
+                std::cout << "Received numbers: " << last_operand1_ << " - " << last_operand2_ << " = " << result << std::endl;
+                break;
+            case '*':
+                std::cout << "Received numbers: " << last_operand1_ << " * " << last_operand2_ << " = " << result << std::endl;
+                break;
+            case '/':
+                std::cout << "Received numbers: " << last_operand1_ << " / " << last_operand2_ << " = " << result << std::endl;
+                break;
+            default:
+                std::cerr << "Error: Unknown operation." << std::endl;
+                break;
         }
-
-        if (is_available_)
-            send_request();
+    } else {
+        std::cerr << "Error: Response payload size is incorrect. Expected 4 bytes, got " << its_payload_data.size() << " bytes." << std::endl;
     }
+
+    if (is_available_)
+        send_request();
+}
+
 
     void send_request() {
-    std::string input_line;
-    char operation;
+        std::string input_line;
+        char operation;
 
-    // Prompt user to enter the operation
-    std::cout << "Enter an expression (e.g., 12 + 34): ";
-    std::getline(std::cin, input_line);
+        // Prompt user to enter the operation
+        std::cout << "Enter an expression (e.g., 12 + 34): ";
+        std::getline(std::cin, input_line);
 
-    // Check if the input line contains a valid operator
-    size_t op_pos = input_line.find_first_of("+-");
-    if (op_pos == std::string::npos) {
-        std::cerr << "Error: Invalid input. Please enter an expression with + or -." << std::endl;
-        return;
+        // Check if the input line contains a valid operator
+        size_t op_pos = input_line.find_first_of("+-/*");
+        if (op_pos == std::string::npos) {
+            std::cerr << "Error: Invalid input. Please enter an expression with + or - or / or *." << std::endl;
+            return;
+        }
+
+        operation = input_line[op_pos];
+        std::string operand1_str = input_line.substr(0, op_pos);
+        std::string operand2_str = input_line.substr(op_pos + 1);
+
+        // Convert string to uint32_t safely
+        uint32_t operand1 = static_cast<uint32_t>(std::stoul(operand1_str));
+        uint32_t operand2 = static_cast<uint32_t>(std::stoul(operand2_str));
+
+        // Store the operands and operation for later display
+        last_operand1_ = operand1;
+        last_operand2_ = operand2;
+        last_operation_ = operation;
+
+        // Prepare the payload: 1 byte for the operation, followed by 4 bytes for each operand
+        std::vector<vsomeip::byte_t> payload_data(9);
+
+        // Set the operation (1 byte)
+        payload_data[0] = static_cast<vsomeip::byte_t>(operation);
+
+        // Set the first operand (4 bytes)
+        payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
+        payload_data[2] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
+        payload_data[3] = static_cast<vsomeip::byte_t>((operand1 >> 8) & 0xFF);
+        payload_data[4] = static_cast<vsomeip::byte_t>(operand1 & 0xFF);
+
+        // Set the second operand (4 bytes)
+        payload_data[5] = static_cast<vsomeip::byte_t>((operand2 >> 24) & 0xFF);
+        payload_data[6] = static_cast<vsomeip::byte_t>((operand2 >> 16) & 0xFF);
+        payload_data[7] = static_cast<vsomeip::byte_t>((operand2 >> 8) & 0xFF);
+        payload_data[8] = static_cast<vsomeip::byte_t>(operand2 & 0xFF);
+
+        // Create a payload from the binary data
+        std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
+        its_payload->set_data(payload_data);
+
+        // Set the payload on the request message
+        request_->set_payload(its_payload);
+
+        if (!be_quiet_) {
+            std::lock_guard<std::mutex> its_lock(mutex_);
+            blocked_ = true;
+            condition_.notify_one();
+        }
     }
 
-    operation = input_line[op_pos];
-    std::string operand1_str = input_line.substr(0, op_pos);
-    std::string operand2_str = input_line.substr(op_pos + 1);
-
-    // Convert string to uint32_t safely
-    uint32_t operand1 = static_cast<uint32_t>(std::stoul(operand1_str));
-    uint32_t operand2 = static_cast<uint32_t>(std::stoul(operand2_str));
-
-    // Store the operands for later display
-    last_operand1_ = operand1;
-    last_operand2_ = operand2;
-
-    // Prepare the payload: 1 byte for the operation, followed by 4 bytes for each operand
-    std::vector<vsomeip::byte_t> payload_data(9);
-
-    // Set the operation (1 byte)
-    payload_data[0] = static_cast<vsomeip::byte_t>(operation);
-
-    // Set the first operand (4 bytes)
-    payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
-    payload_data[2] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
-    payload_data[3] = static_cast<vsomeip::byte_t>((operand1 >> 8) & 0xFF);
-    payload_data[4] = static_cast<vsomeip::byte_t>(operand1 & 0xFF);
-
-    // Set the second operand (4 bytes)
-    payload_data[5] = static_cast<vsomeip::byte_t>((operand2 >> 24) & 0xFF);
-    payload_data[6] = static_cast<vsomeip::byte_t>((operand2 >> 16) & 0xFF);
-    payload_data[7] = static_cast<vsomeip::byte_t>((operand2 >> 8) & 0xFF);
-    payload_data[8] = static_cast<vsomeip::byte_t>(operand2 & 0xFF);
-
-    // Create a payload from the binary data
-    std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
-    its_payload->set_data(payload_data);
-
-    // Set the payload on the request message
-    request_->set_payload(its_payload);
-
-    if (!be_quiet_) {
-        std::lock_guard<std::mutex> its_lock(mutex_);
-        blocked_ = true;
-        condition_.notify_one();
-    }
-}
 
 
     void run() {
@@ -218,6 +237,7 @@ private:
     
     uint32_t last_operand1_; // To store the last operand1
     uint32_t last_operand2_; // To store the last operand2
+    char last_operation_; // To store the last operationS
 };
 
 #ifndef VSOMEIP_ENABLE_SIGNAL_HANDLING
