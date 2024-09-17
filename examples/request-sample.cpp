@@ -132,45 +132,64 @@ public:
     }
 
     void send_request() {
-        uint32_t operand1, operand2;
-        std::string input_line;
+    std::string input_line;
+    char operation;
 
-        // Prompt user to enter two numbers in one line
-        std::cout << "Enter two numbers separated by space: ";
-        std::getline(std::cin, input_line);
+    // Prompt user to enter the operation
+    std::cout << "Enter an expression (e.g., 12 + 34): ";
+    std::getline(std::cin, input_line);
 
-        // Parse the input line
-        std::istringstream iss(input_line);
-        if (!(iss >> operand1 >> operand2)) {
-            std::cerr << "Error: Invalid input. Please enter two numbers separated by space." << std::endl;
-            return;
-        }
-
-        // Store operands for result display
-        last_operand1_ = operand1;
-        last_operand2_ = operand2;
-
-        // Prepare the payload with two 4-byte integers
-        std::vector<vsomeip::byte_t> its_payload_data(8);
-        its_payload_data[0] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
-        its_payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
-        its_payload_data[2] = static_cast<vsomeip::byte_t>((operand1 >> 8) & 0xFF);
-        its_payload_data[3] = static_cast<vsomeip::byte_t>(operand1 & 0xFF);
-        its_payload_data[4] = static_cast<vsomeip::byte_t>((operand2 >> 24) & 0xFF);
-        its_payload_data[5] = static_cast<vsomeip::byte_t>((operand2 >> 16) & 0xFF);
-        its_payload_data[6] = static_cast<vsomeip::byte_t>((operand2 >> 8) & 0xFF);
-        its_payload_data[7] = static_cast<vsomeip::byte_t>(operand2 & 0xFF);
-
-        std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
-        its_payload->set_data(its_payload_data);
-        request_->set_payload(its_payload);
-
-        if (!be_quiet_) {
-            std::lock_guard<std::mutex> its_lock(mutex_);
-            blocked_ = true;
-            condition_.notify_one();
-        }
+    // Check if the input line contains a valid operator
+    size_t op_pos = input_line.find_first_of("+-");
+    if (op_pos == std::string::npos) {
+        std::cerr << "Error: Invalid input. Please enter an expression with + or -." << std::endl;
+        return;
     }
+
+    operation = input_line[op_pos];
+    std::string operand1_str = input_line.substr(0, op_pos);
+    std::string operand2_str = input_line.substr(op_pos + 1);
+
+    // Convert string to uint32_t safely
+    uint32_t operand1 = static_cast<uint32_t>(std::stoul(operand1_str));
+    uint32_t operand2 = static_cast<uint32_t>(std::stoul(operand2_str));
+
+    // Store the operands for later display
+    last_operand1_ = operand1;
+    last_operand2_ = operand2;
+
+    // Prepare the payload: 1 byte for the operation, followed by 4 bytes for each operand
+    std::vector<vsomeip::byte_t> payload_data(9);
+
+    // Set the operation (1 byte)
+    payload_data[0] = static_cast<vsomeip::byte_t>(operation);
+
+    // Set the first operand (4 bytes)
+    payload_data[1] = static_cast<vsomeip::byte_t>((operand1 >> 24) & 0xFF);
+    payload_data[2] = static_cast<vsomeip::byte_t>((operand1 >> 16) & 0xFF);
+    payload_data[3] = static_cast<vsomeip::byte_t>((operand1 >> 8) & 0xFF);
+    payload_data[4] = static_cast<vsomeip::byte_t>(operand1 & 0xFF);
+
+    // Set the second operand (4 bytes)
+    payload_data[5] = static_cast<vsomeip::byte_t>((operand2 >> 24) & 0xFF);
+    payload_data[6] = static_cast<vsomeip::byte_t>((operand2 >> 16) & 0xFF);
+    payload_data[7] = static_cast<vsomeip::byte_t>((operand2 >> 8) & 0xFF);
+    payload_data[8] = static_cast<vsomeip::byte_t>(operand2 & 0xFF);
+
+    // Create a payload from the binary data
+    std::shared_ptr<vsomeip::payload> its_payload = vsomeip::runtime::get()->create_payload();
+    its_payload->set_data(payload_data);
+
+    // Set the payload on the request message
+    request_->set_payload(its_payload);
+
+    if (!be_quiet_) {
+        std::lock_guard<std::mutex> its_lock(mutex_);
+        blocked_ = true;
+        condition_.notify_one();
+    }
+}
+
 
     void run() {
         while (running_) {

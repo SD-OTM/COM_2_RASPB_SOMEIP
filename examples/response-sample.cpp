@@ -96,49 +96,58 @@ public:
 
     void on_message(const std::shared_ptr<vsomeip::message> &_request) {
     std::shared_ptr<vsomeip::payload> its_payload = _request->get_payload();
-    std::vector<vsomeip::byte_t> its_payload_data(its_payload->get_length());
+    const vsomeip::byte_t* data = its_payload->get_data();
+    std::size_t length = its_payload->get_length();
 
-    // Copy the received payload
-    std::memcpy(its_payload_data.data(), its_payload->get_data(), its_payload->get_length());
-
-    if (its_payload_data.size() == 8) { // We expect two 4-byte integers
-        // Convert the first 4 bytes to an integer (first operand)
-        uint32_t operand1 = (static_cast<uint32_t>(its_payload_data[0]) << 24) |
-                            (static_cast<uint32_t>(its_payload_data[1]) << 16) |
-                            (static_cast<uint32_t>(its_payload_data[2]) << 8) |
-                            (static_cast<uint32_t>(its_payload_data[3]));
-
-        // Convert the second 4 bytes to an integer (second operand)
-        uint32_t operand2 = (static_cast<uint32_t>(its_payload_data[4]) << 24) |
-                            (static_cast<uint32_t>(its_payload_data[5]) << 16) |
-                            (static_cast<uint32_t>(its_payload_data[6]) << 8) |
-                            (static_cast<uint32_t>(its_payload_data[7]));
-
-        // Perform addition
-        uint32_t result = operand1 + operand2;
-
-        // Prepare the result to be sent as a response (4 bytes)
-        std::vector<vsomeip::byte_t> response_payload_data(4);
-        response_payload_data[0] = static_cast<vsomeip::byte_t>((result >> 24) & 0xFF);
-        response_payload_data[1] = static_cast<vsomeip::byte_t>((result >> 16) & 0xFF);
-        response_payload_data[2] = static_cast<vsomeip::byte_t>((result >> 8) & 0xFF);
-        response_payload_data[3] = static_cast<vsomeip::byte_t>(result & 0xFF);
-
-        std::shared_ptr<vsomeip::payload> response_payload = vsomeip::runtime::get()->create_payload();
-        response_payload->set_data(response_payload_data);
-
-        // Create and send the response message
-        std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
-        response->set_payload(response_payload);
-
-        // No need to check the return value of send()
-        app_->send(response);
-
-        std::cout << "Received numbers: " << operand1 << " + " << operand2 << std::endl;
-    } else {
-        std::cerr << "Error: Invalid payload size. Expected 8 bytes." << std::endl;
+    // Ensure the payload has the correct size (1 byte for operation + 2*4 bytes for operands)
+    if (length != 9) {
+        std::cerr << "Error: Invalid payload size. Expected 9 bytes, got " << length << " bytes." << std::endl;
+        return;
     }
+
+    // Extract the operation (1st byte) and operands (next 8 bytes)
+    char operation = static_cast<char>(data[0]);
+    uint32_t operand1 = (static_cast<uint32_t>(data[1]) << 24) |
+                        (static_cast<uint32_t>(data[2]) << 16) |
+                        (static_cast<uint32_t>(data[3]) << 8) |
+                        (static_cast<uint32_t>(data[4]));
+
+    uint32_t operand2 = (static_cast<uint32_t>(data[5]) << 24) |
+                        (static_cast<uint32_t>(data[6]) << 16) |
+                        (static_cast<uint32_t>(data[7]) << 8) |
+                        (static_cast<uint32_t>(data[8]));
+
+    // Perform the operation based on the operation character
+    uint32_t result;
+    if (operation == '+') {
+        result = operand1 + operand2;
+        std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
+    } else if (operation == '-') {
+        result = operand1 - operand2;
+        std::cout << "Received numbers: " << operand1 << " - " << operand2 << " = " << result << std::endl;
+    } else {
+        std::cerr << "Error: Invalid operation." << std::endl;
+        return; // Invalid operation, don't send a response
+    }
+
+    // Prepare the result to be sent as a response (4 bytes)
+    std::vector<vsomeip::byte_t> response_payload_data(4);
+    response_payload_data[0] = static_cast<vsomeip::byte_t>((result >> 24) & 0xFF);
+    response_payload_data[1] = static_cast<vsomeip::byte_t>((result >> 16) & 0xFF);
+    response_payload_data[2] = static_cast<vsomeip::byte_t>((result >> 8) & 0xFF);
+    response_payload_data[3] = static_cast<vsomeip::byte_t>(result & 0xFF);
+
+    // Create response payload and message
+    std::shared_ptr<vsomeip::payload> response_payload = vsomeip::runtime::get()->create_payload();
+    response_payload->set_data(response_payload_data);
+
+    std::shared_ptr<vsomeip::message> response = vsomeip::runtime::get()->create_response(_request);
+    response->set_payload(response_payload);
+
+    // Send the response
+    app_->send(response);
 }
+
 
 
 private:
