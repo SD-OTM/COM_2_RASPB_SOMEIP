@@ -123,20 +123,20 @@ public:
     switch (operation) {
         case '+':
             result = operand1 + operand2;
-            std::cout << "Received numbers: " << operand1 << " + " << operand2 << " = " << result << std::endl;
+            std::cout << "Received numbers: " << operand1 << " + " << operand2 /*<< " = " << result */<< std::endl;
             break;
         case '-':
             result = operand1 - operand2;
-            std::cout << "Received numbers: " << operand1 << " - " << operand2 << " = " << result << std::endl;
+            std::cout << "Received numbers: " << operand1 << " - " << operand2 /*<< " = " << result */<< std::endl;
             break;
         case '*':
             result = operand1 * operand2;
-            std::cout << "Received numbers: " << operand1 << " * " << operand2 << " = " << result << std::endl;
+            std::cout << "Received numbers: " << operand1 << " * " << operand2 /*<< " = " << result */ <<std::endl;
             break;
         case '/':
             if (operand2 != 0) {
                 result = operand1 / operand2;
-                std::cout << "Received numbers: " << operand1 << " / " << operand2 << " = " << result << std::endl;
+                std::cout << "Received numbers: " << operand1 << " / " << operand2 /*<< " = " << result */<< std::endl;
             } else {
                 std::cerr << "Error: Division by zero." << std::endl;
                 valid_operation = false;
