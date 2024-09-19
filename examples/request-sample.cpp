@@ -153,24 +153,34 @@ public:
         char operation;
 
         // Prompt user to enter the operation
-        std::cout << "Enter an expression (e.g., 12 + 34): ";
-        std::getline(std::cin, input_line);
+        std::cout << "have results of 12 + 34: ";
+        //std::getline(std::cin, input_line);
 
         // Check if the input line contains a valid operator
-        size_t op_pos = input_line.find_first_of("+-/*");
+
+        /*
+        size_t op_pos = input_line.find_first_of("+-/ *");
         if (op_pos == std::string::npos) {
             std::cerr << "Error: Invalid input. Please enter an expression with + or - or / or *." << std::endl;
             return;
         }
+        */
 
-        operation = input_line[op_pos];
+        //operation = input_line[op_pos];
+
+        operation='+';
+
+        /*
         std::string operand1_str = input_line.substr(0, op_pos);
         std::string operand2_str = input_line.substr(op_pos + 1);
 
         // Convert string to uint32_t safely
         uint32_t operand1 = static_cast<uint32_t>(std::stoul(operand1_str));
         uint32_t operand2 = static_cast<uint32_t>(std::stoul(operand2_str));
+        */
 
+        uint32_t operand1 = 12;
+        uint32_t operand2 = 34;
         // Store the operands and operation for later display
         last_operand1_ = operand1;
         last_operand2_ = operand2;
