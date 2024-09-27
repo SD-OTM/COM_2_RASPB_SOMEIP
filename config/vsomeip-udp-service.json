@@ -1,8 +1,9 @@
 {
-    "unicast" : "192.168.56.101",
+    "unicast" : "192.168.152.148", 
+    "netmask" : "255.255.255.0",
     "logging" :
     {
-        "level" : "debug",
+        "level" : "error",
         "console" : "true",
         "file" : { "enable" : "false", "path" : "/tmp/vsomeip.log" },
         "dlt" : "false"
@@ -25,16 +26,19 @@
                 {
                     "event" : "0x8777",
                     "is_field" : "true",
-                    "update-cycle" : 2000
+                    "update-cycle" : 2000,
+                    "is_reliable" : false
                 },
                 {
                     "event" : "0x8778",
                     "is_field" : "true",
-                    "update-cycle" : 0
+                    "update-cycle" : 0,
+                    "is_reliable" : false
                 },
                 {
                     "event" : "0x8779",
-                    "is_field" : "true"
+                    "is_field" : "true",
+                    "is_reliable" : false
                 }
             ],
             "eventgroups" :
@@ -82,7 +86,7 @@
         "repetitions_base_delay" : "200",
         "repetitions_max" : "3",
         "ttl" : "3",
-        "cyclic_offer_delay" : "2000",
+        "cyclic_offer_delay" : "100",
         "request_response_delay" : "1500"
     }
 }
